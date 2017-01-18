@@ -1,0 +1,2 @@
+#Tue Feb 03 02:24:29 PST 2015
+constructor=strQTPScriptName,intStartIteration,intEndIteration,intTesting,isKillQTPSelected,isResultAtWorkSpaceSelected,processName,isAnyProcessToKill,isGenerateReportSelected,isQTPVisibleSelected

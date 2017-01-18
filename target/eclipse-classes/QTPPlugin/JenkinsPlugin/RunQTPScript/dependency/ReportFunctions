@@ -1,0 +1,617 @@
+Public TestReport
+
+'Create a instance of report
+Set TestReport = New DBReport
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Class: DBReport
+'@Description  Report object to update transaction timing to a database or local excel sheet
+'@Documentation  The class is instantiated with object TestReport and the object by default uses an excel sheet to report transactions and
+                                    'if specified use to database then uses the SBL_REPORTCONNECTIONSTRING constant for DB connection
+'Author:
+'Modified By:
+'Reviewed By:
+'############# Property - ReportFile ##########
+'Description - To specify the excel report file to be used for reporting transactions
+'Type - String. The expression identifying the excel file to be used for reporting
+'Return Value - String. The current excel file used for reporting the transactions
+'Syntax - Object.ReportFile = ("C:\report.xls")
+
+'############# Property - ReportMode ##########
+'Description - Specifies to report the details to a DataBase or local spreadsheet
+'Type - String. The string expression identifying report mode can take values "DB" or "EXCEL"
+'Return Value - String. A string value indicating the current reporting mode
+'Syntax - Object.ReportMode = (String Value)
+
+'############# Property - ReportTransaction ##########
+'Description - Enables or disables the events reported to the database
+'Type - Boolean
+'Return Value - Returns a boolean value with current state of property
+'Syntax - Object.ReportEvent = (Boolean Value)
+
+'############# Method - StartTransaction ##########
+'Description - Marks the beginning of a transaction
+'Remarks - Each transaction name should have an associated StartTransaction and EndTransaction.
+                    'The StartTransaction statement must appear before the associated EndTransaction
+'Syntax - Object.StartTransaction Name
+'Return Value - None
+'Example - TestReport.StartTransaction "Transaction1"
+
+'############# Method - EndTransaction ##########
+'Description - Marks the end of a transaction
+'Remarks - Each transaction name should have an associated StartTransaction and EndTransaction.
+                    'The StartTransaction statement must appear before the associated EndTransaction
+'Syntax - Object.EndTransaction Name
+'Return Value - Long Value. The transaction time in msecs
+'Example - TestReport.EndTransaction "Transaction1"
+
+'############# Method - ReportEvent ##########
+'Description - Reports the validation step to the report log file
+'Remarks - This method replaces the existing Reporter.ReportEvent method but provides all it's functionality in addition to the report log
+'Syntax - Object.ReportEvent QTP_status,Test_Description,Test_Details
+'Example - TestReport.ReportEvent micPass,"The details of the validation","The data involved in the validation"
+
+'############# Method - ReportFatalEvent ##########
+'Description - Reports the fatal error to the report log file
+'Remarks - This method should be used only inside the fatal error function call
+'Syntax - Object.ReportFatalEvent QTP_status,Test_Description,Test_Details,Picture_Details
+'Example - TestReport.ReportFatalEvent micPass,"The details of the validation","The data involved in the validation"
+
+'############# Method - ReportStep ##########
+'Description - Reports the test step with data to the report log file
+'Remarks - This method should be used when to report a test step like navigation or user operation on the AUT
+'Syntax - Object.ReportStep Step_Description,Step_Data
+'Example - TestReport.ReportStep "Set 'User Name' edit field with value'",""
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Class DBReport
+
+    'Variables
+    Private objDI   'as Dictionary Object
+    Private objADOConn  'as ADODB connection object
+    Private blnFlag 'as Boolean
+    Private blnReport   'as Boolean
+    Private intTestID   'as Integer
+    Private strReportMode   'as String
+    Private strReportFile   'as String
+    Private blnReportMode   'as Boolean
+    Private blnReportFile   'as Boolean
+    Private strResultsTable 'as String
+    Private strDetailsTable 'as String
+    Private strConnectionString 'as String
+    Private lngDetailCnt, lngTestIteration, lngHTMLReportID 'as Long
+    Private lngIterationStepCount, lngIterationValidationCount, lngPassCount, lngFailCount, lngWarningCount, intFlyValidationCount, intFlyValidationCount1, intDBStatus, intFatalErr, intOverQTPStatusFlag 'as Long
+    Private objReportLogFile, strFailDescription, objTextReportJenkins 'as Text Stream Object
+    Private arrResults()    'as Array
+
+   
+    'Intialize event
+    Private Sub Class_Initialize()
+
+        'Initialize the first iteration to zero
+        lngTestIteration = Environment("TestIteration"): lngHTMLReportID = 1
+
+        'Initialize variable for report log
+        lngIterationStepCount = 1: lngIterationValidationCount = 1: lngPassCount = 1: lngFailCount = 1: lngWarningCount = 1: intFlyValidationCount = 1: intDBStatus = 0: intFatalErr = 1: intFlyValidationCount1 = 1: intOverQTPStatusFlag = 0
+
+        'Create the report log file
+        Call GenerateReportLogFile(objReportLogFile)
+        
+        'Create the Report file in txt format to write the steps to jenkins
+        Call GenerateTextFileForJenkins(objTextReportJenkins)
+        
+        'Create a input dictionary object and intialize the default key
+        Set objDI = CreateObject("Scripting.Dictionary")
+        objDI.Add "#temp#", 0
+
+        'Default value for report event and flag for connection
+        blnReport = False: blnFlag = True: blnReportMode = True: blnReportFile = True
+
+        'Default report excel file and report mode to excel
+        strReportFile = JenkinsReportPahtOnSlaveMachine & "\" & Environment("TestName") & "_Transactions.xls"
+        strReportMode = "EXCEL"
+        
+        
+        'Create a database connection object
+        Set objADOConn = CreateObject("ADODB.Connection")
+                
+    End Sub
+
+    'Terminate event
+    Private Sub Class_Terminate()
+
+       'Report the test script run status
+       
+        'Release the dictionary object
+        Set objDI = Nothing       'Clean up!
+        
+        'CLose db connection and release objects
+        If Not blnFlag Then objADOConn.Close
+        Set objADOConn = Nothing    'DB clean
+
+        'Close the report log file
+        Call ReportLog(Array("Null"))
+
+        'Close report log file
+        objReportLogFile.Close
+        Set objReportLogFile = Nothing
+        
+        'Close Txt file
+         objTextReportJenkins.Close
+         Set objTextReportJenkins = Nothing
+        
+
+    End Sub
+    
+    Private Sub GenerateReportLogFile(objLogStream)
+
+        Dim objFSO  'as File System Object
+        Const ForAppending = 8, TristateTrue = -1
+        Dim intC    'as Integer
+        Dim strEC   'as string
+        Dim objEventDesc    'as dictionary Obejct
+        Dim QTPreportPath
+        'Create file system object
+        Set objFSO = CreateObject("Scripting.FileSystemObject")
+        QTPreportPath=JenkinsReportPahtOnSlaveMachine&"\qtpReport"
+        If (Not objFSO.FolderExists(QTPreportPath)) Then
+            objFSO.CreateFolder (QTPreportPath)
+			'Testing
+        End If
+        'Create a new text file
+        Set objLogStream = objFSO.CreateTextFile(QTPreportPath & "\" & "Report.html", True, True)
+        objLogStream.Close
+
+        'Report log file path in QTP result
+        Set objEventDesc = CreateObject("Scripting.Dictionary")
+        objEventDesc("ViewType") = "Sell.Explorer.2"
+        objEventDesc("Status") = micDone
+        objEventDesc("EnableFilter") = False
+        objEventDesc("NodeName") = "Custom Report File"
+        objEventDesc("StepHtmlInfo") = "<TABLE border='1'><TR><TD style='background-color:green'>Custom Report File</TD><TD>" & QTPreportPath & "\" & "Report.html" & "</TD></TR></TABLE>"
+        Reporter.LogEvent "Replay", objEventDesc, Reporter.GetContext
+        Set objEventDesc = Nothing
+    
+        'Open the file again in edit mode
+        Set objLogStream = objFSO.OpenTextFile(QTPreportPath & "\" & "Report.html", ForAppending, False, TristateTrue)
+    
+        'WriteLine initial template html report file
+        objLogStream.WriteLine "<html>"
+        objLogStream.WriteLine "<body>"
+        objLogStream.WriteLine "<script>"
+        objLogStream.WriteLine "var toggledDisplay = new Object();"
+    
+        'WriteLine ten iterations
+        For intC = 1 To 30
+            objLogStream.WriteLine "toggledDisplay['" & intC & "'] = true;"
+            strEC = strEC & "'" & intC & "',"
+        Next
+        strEC = Left(strEC, Len(strEC) - 1)
+    
+        'Continue creating file template
+        objLogStream.WriteLine "function toggleDisplay(bDisplayed)"
+        objLogStream.WriteLine "{"
+        objLogStream.WriteLine "    if(!document.getElementById || toggleDisplay.arguments.length < 2) return;"
+        objLogStream.WriteLine "    var displayed = new Object();"
+        objLogStream.WriteLine "    displayed['true'] = 'block';"
+        objLogStream.WriteLine "    displayed['false'] = 'none';"
+        objLogStream.WriteLine "    for(var i = 1; i < toggleDisplay.arguments.length; i++)"
+        objLogStream.WriteLine "    {"
+        objLogStream.WriteLine "        oDisplay = document.getElementById(toggleDisplay.arguments[i]);"
+        objLogStream.WriteLine "        if(oDisplay)"
+        objLogStream.WriteLine "        {"
+        objLogStream.WriteLine "            oDisplay.style.display = displayed[bDisplayed];"
+        objLogStream.WriteLine "            if(bDisplayed)"
+        objLogStream.WriteLine "            {"
+        objLogStream.WriteLine "                oImages = oDisplay.getElementsByTagName('IMG');"
+        objLogStream.WriteLine "                for(var j = 0; j < oImages.length; j++)"
+        objLogStream.WriteLine "                oImages[j].src = oImages[j].src;"
+        objLogStream.WriteLine "            }"
+        objLogStream.WriteLine "            if(typeof toggledDisplay[toggleDisplay.arguments[i]] != 'undefined')"
+        objLogStream.WriteLine "            toggledDisplay[toggleDisplay.arguments[i]] = !bDisplayed;"
+        objLogStream.WriteLine "        }"
+        objLogStream.WriteLine "    }"
+        objLogStream.WriteLine "}"
+        objLogStream.WriteLine "</script>"
+    
+        'WriteLine the header table
+        objLogStream.WriteLine "<table cols=3 border='1.5' bordercolor='black' rules='all'>"
+        objLogStream.WriteLine "<tr>"
+        objLogStream.WriteLine "<td width='40%' bgcolor='black'><font  color='white' size=3><b>Date</b></td>"
+        objLogStream.WriteLine "<td width='25%' bgcolor='black'><font  color='white' size=3><b>Environment</b></td>"
+        objLogStream.WriteLine "<td width='35%' bgcolor='black'><font  color='white' size=3><b>Script Name</b></td>"
+        objLogStream.WriteLine "</tr>"
+    
+        'General Information
+        objLogStream.WriteLine "<tr>"
+        objLogStream.WriteLine "<td><b>" & Now & "</b></td>"
+        objLogStream.WriteLine "<td><font  color='black' size=2><b>" & TestEnvironment & "</b></font></td>"
+        objLogStream.WriteLine "<td><font  color='black' size=2><b>" & Environment("TestName") & "</b></font></td>"
+        objLogStream.WriteLine "</tr>"
+        objLogStream.WriteLine "</table>"
+        objLogStream.WriteLine "<br>"
+        objLogStream.WriteLine "<a href=""JavaScript://"" onclick=""toggleDisplay(true," & strEC & ");"">Expand All</a> | <a href=""JavaScript://"" onclick=""toggleDisplay(false, " & strEC & ");"">Collapse All</a>"
+    
+        ' To Insert the Header Structure for the Report
+        objLogStream.WriteLine "<table cols=3 border='1' bordercolor='black' rules='all'>"
+        objLogStream.WriteLine "<tr>"
+        objLogStream.WriteLine "<td width='40%' bgcolor='#444444'><font  color='white' size=2><b>Description</b></font></td>"
+        objLogStream.WriteLine "<td width='25%' bgcolor='#444444'><font  color='white' size=2><b>Test Data</b></font></td>"
+        objLogStream.WriteLine "<td width='35%' bgcolor='#444444'><font  color='white' size=2><b>Validations</b></font></td>"
+        objLogStream.WriteLine "</tr>"
+    
+    End Sub
+    
+    'Sub to replace existing Reporter.ReportEvent
+    Sub ReportEvent(triStatus, strStepName, strDetails)
+
+       'Report the event to test resutls
+        Reporter.ReportEvent triStatus, strStepName, strDetails
+
+       'Report to output log
+       If triStatus <> micDone Then ReportLog (Array(triStatus, strStepName, strDetails))
+
+    End Sub
+    
+    'Report fatal step
+    Sub ReportFatalEvent(triStatus, strStepName, strDetails, strPicturePath)
+        
+        'Report output to test results
+        If IsNull(strPicturePath) Or strPicturePath = "" Or Environment("ProductVer") = "9.5" Then
+
+            Reporter.ReportEvent triStatus, strStepName, strDetails
+
+        Else
+
+            Reporter.ReportEvent triStatus, strStepName, strDetails, strPicturePath
+
+        End If
+
+        'Report Step and data to the log
+       Call ReportLog(Array(triStatus, strStepName, strDetails, strPicturePath))
+
+    End Sub
+    
+     'Sub to replace existing Reporter.ReportEvent
+    Sub ReportStep(strStep, strData)
+
+       'Report Step and data to the log
+       Call ReportLog(Array(strStep, strData))
+
+    End Sub
+    
+    'Private sub to write to log file
+Private Sub ReportLog(arrIp)
+
+        Dim intArrayCount, intC 'as integer
+        Dim strTemp 'as String
+        Dim strLastIteraion
+       'Create one text file to write the data for jenkins
+        'Dim FilePath
+        'Const ForAppendingText = 8, TristateTrueText = -1
+        'FilePath = "C:\Report.txt"
+        'Set objTextFSO = CreateObject("Scripting.FileSystemObject")
+        'If Not objTextFSO.FileExists(FilePath) Then
+            'Set objCreateTextFile = objTextFSO.CreateTextFile(FilePath, True, False)
+            'objCreateTextFile.Close
+            'Set objTextFile = objTextFSO.OpenTextFile(FilePath, ForAppendingText, False, 0)
+        'Else
+        'Set objTextFile = objTextFSO.OpenTextFile(FilePath, ForAppendingText, False, 0)
+        'End If
+        
+
+        'If diffrent iteration then start a fresh table in report
+        If (Environment("TestIteration") <> lngTestIteration) Or (lngHTMLReportID = 1) Then
+
+            'if first iteration of the test, table already initiated
+            If lngHTMLReportID = 1 Then
+
+                'get the current iteration
+                lngTestIteration = Environment("TestIteration")
+
+                'Insert table header for first iteration
+                objReportLogFile.WriteLine "<tr><td colspan=3><font  size=2><center><b><a style=""text-decoration:none"" href=" & Chr(34) & "JavaScript://" & Chr(34) & " onclick=" & Chr(34) & "toggleDisplay(toggledDisplay['" & lngHTMLReportID & "'],'" & lngHTMLReportID & "')" & Chr(34) & ">Test iteration - " & lngTestIteration & "</a><b></center></font></td></tr>"
+                objReportLogFile.WriteLine "<tr id='1'>"
+                objReportLogFile.WriteLine "<td colspan=3>"
+                objReportLogFile.WriteLine "<table cols=3 width='100%' border='1' bordercolor='black' rules='all'>"
+                
+                'Write the Test Iteration to text file to display in jenkins
+                objTextReportJenkins.WriteLine "(" & intFlyValidationCount & ".)" & "Test iteration - " & lngTestIteration & ""
+                intFlyValidationCount = intFlyValidationCount + 1
+                'Increment the report counter
+                lngHTMLReportID = lngHTMLReportID + 1
+
+                'Initialize array results
+                        ReDim Preserve arrResults(3, 0)
+                arrResults(0, 0) = lngTestIteration
+
+            Else
+
+                'Populate the results to the array after change of iteration
+                ReDim Preserve arrResults(3, lngHTMLReportID - 1)
+                arrResults(0, lngHTMLReportID - 2) = lngTestIteration
+                arrResults(1, lngHTMLReportID - 2) = lngFailCount - 1
+                arrResults(2, lngHTMLReportID - 2) = lngWarningCount - 1
+
+                'Close previous iteration table
+                objReportLogFile.WriteLine "</table>"
+                objReportLogFile.WriteLine "</td>"
+                objReportLogFile.WriteLine "</tr>"
+    
+                'Reset the pass, fail and warning count
+                lngTestIteration = Environment("TestIteration")
+                lngIterationValidationCount = 1: lngPassCount = 1: lngFailCount = 1: lngWarningCount = 1: intFatalErr = 1
+    
+                'Insert table header for next iteration
+                objReportLogFile.WriteLine "<tr><td colspan=3><font  size=2><center><b><a style=""text-decoration:none"" href=" & Chr(34) & "JavaScript://" & Chr(34) & " onclick=" & Chr(34) & "toggleDisplay(toggledDisplay['" & lngHTMLReportID & "'],'" & lngHTMLReportID & "')" & Chr(34) & ">Test iteration - " & lngTestIteration & "</a><b></center></font></td></tr>"
+                objReportLogFile.WriteLine "<tr id='" & lngHTMLReportID & "'>"
+                objReportLogFile.WriteLine "<td colspan=3>"
+                objReportLogFile.WriteLine "<table cols=3 width='100%' border='1' bordercolor='black' rules='all'>"
+                
+                'Write the Test Iteration to text file to display in jenkins
+                objTextReportJenkins.WriteLine "(" & intFlyValidationCount & ".)" & "Test iteration - " & lngTestIteration & ""
+                intFlyValidationCount = intFlyValidationCount + 1
+                
+                'Increase the counter for report
+                lngHTMLReportID = lngHTMLReportID + 1
+                
+''/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+                 strLastIteraion = "No"
+                ''Write the status of the Iteraion in DB depending on Pass or fail
+                 If intDBStatus = 1 Then
+                 
+                    ''Send the status of the script as failed as the intDBStarus counter is increased in the MicFail
+                    intOverQTPStatusFlag = 1
+                    strStatus = "Failed"
+                    intDBStatus = 0
+                 Else
+                 
+                    ''Send the status of the script as passed intDBStarus counter is not increased in the MicFail
+                    strStatus = "Passed"
+                    
+                                    
+                End If
+                
+''////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            End If
+
+        End If
+
+        'Get the input array count
+        intArrayCount = UBound(arrIp)
+
+        'Based on array count do the reports
+        Select Case intArrayCount
+
+            Case 0  'Close tables for end of test
+
+                'Close previous iteration table
+                objReportLogFile.WriteLine "</table>"
+                objReportLogFile.WriteLine "</td>"
+                objReportLogFile.WriteLine "</tr>"
+
+                'Populate the results to the array after for the final
+                ReDim Preserve arrResults(3, lngHTMLReportID - 2)
+                arrResults(0, lngHTMLReportID - 2) = lngTestIteration
+                arrResults(1, lngHTMLReportID - 2) = lngFailCount - 1
+                arrResults(2, lngHTMLReportID - 2) = lngWarningCount - 1
+
+                'Prepare output report
+                objReportLogFile.WriteLine "<p>"
+                
+                'if DBstatus is 1 then it has atlest one iteration as failed
+                If intDBStatus = 1 Then
+                     intOverQTPStatusFlag = 1
+                End If
+                
+                'Over all QTP execution status is fetched from iteration status if atleast one iteraion failed then report will be failed
+                'If Reporter.RunStatus = micFail Then
+                If intOverQTPStatusFlag = 1 Then
+
+                    strTemp = "<b>Script status: <font size=3 color='#D00000'>Failed</font></b>"
+
+                'ElseIf intOverQTPStatusFlag = 0 Then
+
+                   ' strTemp = "<b>Script status: <font size=3 color='#ff8000'>Warning</font></b>"
+
+                'ElseIf Reporter.RunStatus = micPass Or Reporter.RunStatus = micDone Then
+                ElseIf intOverQTPStatusFlag = 0 Then
+
+                    strTemp = "<b>Script status: <font size=3 color='green'>Passed</font></b>"
+
+                End If
+
+                'Write script status
+                objReportLogFile.WriteLine strTemp & vbCrLf & "<br>Iterations:- "
+
+                For intC = 0 To UBound(arrResults, 2)
+
+                    If arrResults(3, intC) > 0 Then
+
+                        strTemp = "<a style=""text-decoration:none"" href=" & Chr(34) & "JavaScript://" & Chr(34) & " onclick=" & Chr(34) & "toggleDisplay(toggledDisplay['" & (intC + 1) & "'],'" & (intC + 1) & "')" & Chr(34) & "><font size=2 color='#D00000'>" & arrResults(0, intC) & "-Fatal </font></a>"
+                    
+                    ElseIf arrResults(1, intC) > 0 Then
+
+                        strTemp = "<a style=""text-decoration:none"" href=" & Chr(34) & "JavaScript://" & Chr(34) & " onclick=" & Chr(34) & "toggleDisplay(toggledDisplay['" & (intC + 1) & "'],'" & (intC + 1) & "')" & Chr(34) & "><font size=2 color='#D00000'>" & arrResults(0, intC) & "-Failed </font></a>"
+
+                    ElseIf arrResults(2, intC) > 0 Then
+
+                        strTemp = "<a style=""text-decoration:none"" href=" & Chr(34) & "JavaScript://" & Chr(34) & " onclick=" & Chr(34) & "toggleDisplay(toggledDisplay['" & (intC + 1) & "'],'" & (intC + 1) & "')" & Chr(34) & "><font size=2 color='#ff8000'>" & arrResults(0, intC) & "-Warning </font></a>"
+
+                    Else
+
+                        strTemp = "<a style=""text-decoration:none"" href=" & Chr(34) & "JavaScript://" & Chr(34) & " onclick=" & Chr(34) & "toggleDisplay(toggledDisplay['" & (intC + 1) & "'],'" & (intC + 1) & "')" & Chr(34) & "><font size=2 color='green'>" & arrResults(0, intC) & "-Passed </font></a>"
+
+                    End If
+                    
+                    objReportLogFile.WriteLine strTemp
+                Next
+
+                'Close the main table
+                objReportLogFile.WriteLine "</p>" & vbCrLf & "</table>"
+''////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            ''''Call the Sub to Update the Last iteration status to DB
+
+                 strLastIteraion = "YES"
+                ''Write the status of the Iteraion in DB depending on Pass or fail
+                 If intDBStatus = 1 Then
+                    
+                    ''Send the status of the script as failed as the intDBStarus counter is increased in the MicFail
+                    strStatus = "Failed"
+                    intDBStatus = 0
+                 Else
+                 
+                    ''Send the status of the script as passed intDBStarus counter is not increased in the MicFail
+                    strStatus = "Passed"
+                
+                End If
+''//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+                     
+            Case 1  'Reporting a Step
+
+        
+                'Start the html row
+                objReportLogFile.WriteLine "<tr>"
+        
+                'Report step description and increment step number
+                 objReportLogFile.WriteLine "<td width='40%'><font size=2>" & lngIterationStepCount & ". " & arrIp(0) & "</font></td>"
+                'Report step description in text file to display in jenkins
+                 
+                 lngIterationStepCount = lngIterationStepCount + 1
+
+                
+                
+                 'Report test data
+                If arrIp(1) = "" Then
+                    objReportLogFile.WriteLine "<td width='25%'>&nbsp;</td>"
+                    objTextReportJenkins.WriteLine "(" & intFlyValidationCount & ".)" & arrIp(0) & " " & "'" & arrIp(1) & "'"
+                    intFlyValidationCount = intFlyValidationCount + 1
+                Else
+                    objReportLogFile.WriteLine "<td width='25%'><font size=2>" & arrIp(1) & "</font></td>"
+                    objTextReportJenkins.WriteLine "(" & intFlyValidationCount & ".)" & arrIp(0) & " " & "'" & arrIp(1) & "'"
+                    intFlyValidationCount = intFlyValidationCount + 1
+                End If
+
+                'Validation step is empty
+                objReportLogFile.WriteLine "<td width='35'>&nbsp;</td>"
+                
+
+                'End the html row
+                objReportLogFile.WriteLine "</tr>"
+                
+                
+                
+                            
+            Case 2  'Reporitng a validation
+
+                'Start the html row
+                objReportLogFile.WriteLine "<tr>"
+                objReportLogFile.WriteLine "<td width='40%'><font size=2>Validation Step</font></td>"
+                objReportLogFile.WriteLine "<td width='25%'><font size=2>&nbsp</font></td>"
+                               
+                
+                'Update the status of pass and fail count
+                Select Case arrIp(0)
+        
+                    Case micPass
+
+                        strTemp = lngIterationValidationCount & ". " & arrIp(1) & vbCrLf & arrIp(2)
+                        objReportLogFile.WriteLine "<td width='35%'><font color='green' size=2>" & strTemp & "</font></td>"
+                        objTextReportJenkins.WriteLine "(" & intFlyValidationCount & ".)" & "Validation Step: " & strTemp
+                        intFlyValidationCount = intFlyValidationCount + 1
+                        intFlyValidationCount1 = intFlyValidationCount1 + 1
+                        lngIterationValidationCount = lngIterationValidationCount + 1
+                        lngPassCount = lngPassCount + 1
+                        
+
+                    Case micFail
+
+                        strTemp = lngIterationValidationCount & ". " & arrIp(1) & vbCrLf & arrIp(2)
+                        objReportLogFile.WriteLine "<td width='35%'><font color='#D00000' size=2>" & strTemp & "</font></td>"
+                        objTextReportJenkins.WriteLine "(" & intFlyValidationCount & ".)" & "Validation Step: " & strTemp
+                        intFlyValidationCount = intFlyValidationCount + 1
+                        intFlyValidationCount1 = intFlyValidationCount1 + 1
+                        lngIterationValidationCount = lngIterationValidationCount + 1
+                        lngFailCount = lngFailCount + 1
+                        
+                        intDBStatus = 1
+                        strFailDescription = strTemp
+                    Case micWarning
+
+                        strTemp = lngWarningCount & ". " & arrIp(1) & vbCrLf & arrIp(2)
+                        objReportLogFile.WriteLine "<td width='35%'><font color='#ff8000' size=2>" & strTemp & "</font></td>"
+                        objTextReportJenkins.WriteLine "(" & intFlyValidationCount & ".)" & "Validation Step: " & strTemp
+                        intFlyValidationCount1 = intFlyValidationCount1 + 1
+                        intFlyValidationCount = intFlyValidationCount + 1
+                        lngWarningCount = lngWarningCount + 1
+
+                    Case Else Reporter.ReportEvent micFail, "The report log method to report validation step failed","The first argument of procedure call 'ReportEvent' was wrong"
+
+                End Select
+
+                'End the html row
+                objReportLogFile.WriteLine "</tr>"
+                
+            Case 3  'Reporting a Fatal Error
+
+                'Update fatal error results
+                arrResults(3, lngHTMLReportID - 2) = 1
+
+                'Start the html row
+                objReportLogFile.WriteLine "<tr>"
+        
+
+                'Report the fatal error
+                strTemp = arrIp(1) & vbCrLf & arrIp(2)
+                If arrIp(3) <> "" Then strTemp = strTemp & vbCrLf & "&lt;<img src='" & arrIp(3) & "'>&gt;"
+                objReportLogFile.WriteLine "<td colspan='3' width='100%' bgcolor='#D00000'>" & strTemp & "</td>"
+                'Report the Fatal error reason with out image in jenkins
+                 
+                objTextReportJenkins.WriteLine "(" & intFlyValidationCount & ".)" & strTemp
+                intFlyValidationCount = intFlyValidationCount + 1
+                intFlyValidationCount1 = intFlyValidationCount1 + 1
+
+                'End the html row
+                objReportLogFile.WriteLine "</tr>"
+                            Dim temp
+                                                        
+                            If intFatalErr = 1 Then
+                                temp = Replace(strTemp, "'", "''")
+                                intDBStatus = 1
+                                strFailDescription = temp
+                                intFatalErr = intFatalErr + 1
+                            End If
+        End Select
+        
+  
+    End Sub
+'Sub to generate report log file
+    Private Sub GenerateTextFileForJenkins(objLogStream1)
+
+        Dim objFSO1  'as File System Object
+        Const ForAppending1 = 2, TristateTrue1 = 0
+        Dim intC1    'as Integer
+        Dim strEC1   'as string
+        Dim objEventDesc1    'as dictionary Obejct
+    
+        'Create file system object
+        Set objFSO1 = CreateObject("Scripting.FileSystemObject")
+    
+        'Create a new text
+        Set objLogStream1 = objFSO1.CreateTextFile(JenkinsReportPahtOnSlaveMachine + "\detailsteps", True, True)
+        objLogStream1.Close
+    
+         
+        'Open the file again in edit mode
+        Set objLogStream1 = objFSO1.OpenTextFile(JenkinsReportPahtOnSlaveMachine + "\detailsteps", ForAppending1, False, TristateTrue1)
+    
+        
+    End Sub
+   
+  
+End Class
+
+
+

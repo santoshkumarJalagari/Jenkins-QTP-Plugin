@@ -1,0 +1,47 @@
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+  
+  <f:section title="QTP Options">
+		  <f:entry title="QTP Script Name" field="strQTPScriptName">
+		    <f:textbox />
+		  </f:entry>
+		
+		   <f:entry title="Start Iteration:" field="intStartIteration">
+		    <f:textbox />
+		  </f:entry>
+		   
+		   <f:entry title="End Iteration:" field="intEndIteration">
+		    <f:textbox />
+		  </f:entry>
+		  
+  </f:section>
+  
+  <f:section title="Advanced QTP Options">
+      <f:advanced>
+      	<f:entry title="${% Kill QTP Before Start Execution?}" field="isKillQTPSelected">
+		       <f:checkbox/>
+		</f:entry> 
+		<f:entry title="${% Generate detail HTML Report?}" field="isGenerateReportSelected">
+		       <f:checkbox/>
+		</f:entry> 
+		<f:entry title="${% Make QTP Visible while executing?}" field="isQTPVisibleSelected">
+		       <f:checkbox/>
+		</f:entry> 
+		
+      	<f:block>
+			 
+			    <f:optionalBlock title="do you want to kill any process before starting execution?" field="isAnyProcessToKill">
+			     <f:entry title="Process Name:" field="processName">
+		   			 <f:textbox />
+		 		 </f:entry>
+			    </f:optionalBlock>
+			 
+		</f:block>
+      </f:advanced>
+  </f:section>
+  
+
+
+  
+
+  
+</j:jelly>

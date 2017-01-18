@@ -1,0 +1,797 @@
+'DisplayColumns method registered on SiebList class object
+RegisterUserFunc "SiebList","DisplayColumns","SiebelListDisplayColumns"
+
+'GoToScreen method registered on SiebPageTabs class object
+RegisterUserFunc "SiebPageTabs","GoToScreen","SiebelGoToScreen"
+
+'GoToView method registered on SiebPageTabs class object
+RegisterUserFunc "SiebPageTabs","GoToView","SiebelGoToView"
+
+'GoTo method registered on SiebScreenViews class object
+RegisterUserFunc "SiebScreenViews","GoTo","SiebelGoTo"
+
+'VerifyLOV method registered on SiebPicklist class object
+RegisterUserFunc "SiebPicklist","VerifyLOV","SiebPickListVerify"
+
+'waiting for the siebel object to appear registered on SiebView,SiebScreenView and SiebApplet
+RegisterUserFunc "SiebScreenViews", "GetExist", "SiebScreenViewExist",True
+RegisterUserFunc "SiebView", "GetExist", "SiebScreenViewExist",True
+RegisterUserFunc "SiebApplet", "GetExist", "SiebScreenViewExist",True
+
+'Registered Siebel functions for documenting navigational steps
+RegisterUserFunc "SiebWebButton", "Click", "Custom_SiebWebButtonClick"
+RegisterUserFunc "SiebButton", "Click", "Custom_SiebButtonClick"
+RegisterUserFunc "SiebMenu", "Select", "Custom_SiebMenuSelect"
+RegisterUserFunc "SiebText", "SetText", "Custom_SiebTextSetText"
+RegisterUserFunc "SiebPDQ", "Select", "Custom_SiebPDQSelect"
+RegisterUserFunc "SiebPicklist", "Select", "Custom_SiebPicklistSelect"
+RegisterUserFunc "SiebPicklist", "SetText", "Custom_SiebPicklistSetText"
+RegisterUserFunc "SiebToolbar", "Click", "Custom_SiebToolbarClick"
+RegisterUserFunc "SblPickList", "Select", "Custom_SblPickListSelect"
+RegisterUserFunc "SblEdit", "Set", "Custom_SblEditSet"
+RegisterUserFunc "SblButton", "Click", "Custom_SblButtonClick"
+RegisterUserFunc "SiebList", "ActivateRow", "Custom_SiebListActivateRow"
+RegisterUserFunc "SiebList", "DrillDownColumn", "Custom_SiebListDrillDownColumn"
+RegisterUserFunc "SiebCheckbox", "SetOff", "Custom_SiebCheckboxSetOff"
+RegisterUserFunc "SiebCheckbox", "SetOn", "Custom_SiebCheckboxSetOn"
+RegisterUserFunc "SiebTextArea", "SetText", "Custom_SiebTextAreaSetText"
+RegisterUserFunc "SiebText", "ProcessKey", "Custom_SiebTextProcessKey"
+RegisterUserFunc "SiebText", "OpenPopup", "Custom_SiebTextOpenPopup"
+RegisterUserFunc "SiebApplication", "ProcessKeyboardAccelerator", "Custom_SiebApplicationProcessKeyboardAccelerator"
+RegisterUserFunc "SblTable", "IsColumnExists", "IsColumnExists" 
+RegisterUserFunc "Browser", "Quit", "Quit" 
+RegisterUserFunc "SblTable", "MySortUp", "MySortUp"
+RegisterUserFunc "SblTable", "MySortDown", "MySortDown" 
+RegisterUserFunc "SblTable", "OpenMyCellElement", "OpenMyCellElement"
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: SiebelListDisplayColumns (objSiebList,strColumns)
+'@Description Function to handle columns not displayed in call center.
+'@Documentation This function checks for list <strColumns> provided are displayed if not it displays the column if available
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function SiebelListDisplayColumns (objSiebList,strColumns)
+ 	'declare Variables
+	Dim objSiebApp	'as Object
+	Dim objSiebPopFra	'as Object
+	Dim objHidWebList	'as Object
+	Dim intHidItemsCount	'as Integer
+	Dim arrColumns	'as Array
+    	Dim intCounter	'as Integer
+	Dim intCounterI	'as Integer
+	Dim intCounterH	'as Integer
+	Dim strColNotAva	'as String
+	Dim arrColNotAva	'as Array
+	Dim strColFndHid	'as String
+	Dim strColNotFndHid	'as String
+    	Dim blnColFndHid	'as Boolean
+	Dim strColFndUI	'as String
+	Dim strColNotFndUI	'as String
+	Dim arrColFndHid	'as Array
+
+	'Check the coulmns are available in User Interface(UI)
+	arrColumns = Split(strColumns,",")	: strColFndUI = "" : strColNotFndUI = "" 
+    	For intCounter = 0 To UBound(arrColumns)
+
+		'Disable warning reporter event
+		Reporter.Filter = rfEnableErrorsOnly 
+		'Check for the column
+		strColFndUI = objSiebList.GetColumnRepositoryName(arrColumns(intCounter))
+		'Enable reporter all events
+		Reporter.Filter = rfEnableAll 
+
+		'Get the column not found list
+		If Len(strColFndUI) = 0 Then strColNotFndUI = strColNotFndUI & "," & arrColumns(intCounter) 
+	Next
+
+	'Enable the coulmns displayed function if not available column exist
+	If  Len(strColNotFndUI) > 0 Then
+		
+		'Get parent object of siebel list object
+		Set objSiebApp = objSiebList.GetTOProperty("parent")
+	
+		'Enable menu for the siebel applet object
+		objSiebApp.SiebMenu("classname:=SiebMenu","repositoryname:=SiebMenu").Select "ColumnsDisplayed"
+		Browser("windowcontext:=Popup","name:=SiebWebPopupWindow").Page("title:=SiebWebPopupWindow").Sync
+	
+		'Describe frame and web list objects for the siebel menu popup
+		Set objSiebPopFra = Browser("windowcontext:=Popup","name:=SiebWebPopupWindow").Page("title:=SiebWebPopupWindow").Frame("siebelobjtype:=_swepopcontent Frame","visible:=True")
+		Set objHidWebList = objSiebPopFra.WebList("repositoryname:=.*.HiddenItems","siebelobjtype:=SiebWebListBox")
+		intHidItemsCount = objHidWebList.GetROProperty("items count")
+	
+		'Check what are the items available in the hidden list
+		arrColumns = Split(Mid(strColNotFndUI,2),",")	: strColFndHid = "" : strColNotFndHid = ""
+		For intCounterH = 0 To UBound(arrColumns)
+			blnColFndHid = False	'Intialize variable
+			For  intCounterI = 1 To intHidItemsCount
+				If arrColumns(intCounterH) = objHidWebList.GetItem(intCounterI) Then strColFndHid = strColFndHid & "," & arrColumns(intCounterH) : blnColFndHid = True : Exit For
+			Next
+			If Not blnColFndHid Then strColNotFndHid = strColNotFndHid & "," & arrColumns(intCounterH)
+		Next
+		
+		'Move the items hidden list to available list and save the request. If no columns available in the hidden list cancel popup
+        If Len(strColNotFndHid) > 1 Then TestReport.ReportEvent micFail,"The following columns couldn't be displayed, UI name not valid. May be check for trailing and leading space and case sensitivity ", Mid(strColNotFndHid,2)
+		arrColFndHid = Split(strColFndHid,",")
+		
+		If UBound(arrColFndHid) > 0 Then
+			'make the selection
+			For intCounter = 1 To UBound(arrColFndHid)
+				If intCounter = 1 Then objHidWebList.Select arrColFndHid(intCounter)	Else objHidWebList.ExtendSelect arrColFndHid(intCounter)
+			Next
+			'move the selected items to visible list and save the settings
+			objSiebPopFra.SblButton("repositoryname:=.*ButtonShowItem","siebelobjtype:=SiebWebButton").Click
+			Browser("windowcontext:=Popup","name:=SiebWebPopupWindow").Page("title:=SiebWebPopupWindow").Sync
+			objSiebPopFra.SblButton("repositoryname:=.*ButtonSave","siebelobjtype:=SiebWebButton").Click
+        	Else
+			objSiebPopFra.SblButton("repositoryname:=.*ButtonCancel","siebelobjtype:=SiebWebButton").Click
+        	End If
+		
+	End If
+
+	'Sync with the list object
+	objSiebList.WaitProperty "repositoryname",objSiebList.GetTOProperty("repositoryname"),20000
+	SiebApplication("repositoryname:=Siebel Universal Agent","classname:=SiebApplication").Sync
+
+End Function
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: SiebelGoToScreen (objSiebPageTabs,strScreen)
+'@Description Function to navigate to a screen and sync with the navigated screen
+'@Documentation This function with the SiebPageTabs object <objSiebPageTabs> navigates to screen <strScreen> and sync with the screen
+'Return value: Type boolean. Success of page navigation
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function SiebelGoToScreen (ByRef objSiebPageTabs, ByRef strScreen)
+
+   'Variables
+   Dim lngTimer	'as Long
+   Dim lngDelta	'as Long
+   Dim strCurrentScr	'as String
+
+	'Navigate to Screen
+	objSiebPageTabs.GoToScreen strScreen
+
+	'Report the step to the log file
+	TestReport.ReportStep "Navigate to screen by clicking on the link in Siebel tab '" & objSiebPageTabs.GetROProperty("repositoryname") & "'",strScreen
+
+	'Disable error
+	On Error resume Next
+
+	'Start time
+	lngTimer = Timer 
+	lngDelta = 0
+	
+	'Sync with the navigated screen
+	Do While lngDelta <= 120
+		
+		'get current view
+		strCurrentScr = objSiebPageTabs.ActiveScreen
+
+		'If the view found exit loop
+		If Err.Number = 0 And Trim(strScreen) = Trim(strCurrentScr) Then
+
+			'Then exit loop
+			Exit Do
+		Else
+
+			'Timer Delta
+			lngDelta = Timer - lngTimer
+
+			'If negative then intiate the timer
+			If lngDelta < 0 Then lngTimer = Timer
+            
+		End If
+	Loop
+    
+	'Reset error
+	On Error GoTo 0
+End Function
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: SiebelGoToView (objSiebPageTabs,strView)
+'@Description Function to navigate to a view and sync with the navigated view
+'@Documentation This function with the SiebPageTabs object <objSiebPageTabs> navigates to screen <strView> and sync with the view
+'Return value: Type boolean. Success of view navigation
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function SiebelGoToView (ByRef objSiebPageTabs, ByRef strView)
+
+   'Variables
+   Dim lngTimer	'as Long
+   Dim lngDelta	'as Long
+   Dim strCurrentView	'as String
+
+	'Navigate to Screen
+	objSiebPageTabs.GoToView strView
+
+	'Report the step to the log file
+	TestReport.ReportStep "Navigate to view by clicking on the view in Siebel tab '" & objSiebPageTabs.GetROProperty("repositoryname") & "'",strView
+	
+	'Disable error
+	On Error resume Next
+
+	'Start time
+	lngTimer = Timer
+	lngDelta = 0
+	
+	'Sync with the navigated view
+	Do While lngDelta <= 120
+
+		'get current view
+		strCurrentView = objSiebPageTabs.ActiveView
+
+		'If the view found exit loop
+		If Err.Number = 0 And Trim(strView) = Trim(strCurrentView) Then
+
+			'Then exit loop
+			Exit Do
+		Else
+
+			'Timer Delta
+			lngDelta = Timer - lngTimer
+
+			'If negative then intiate the timer
+			If lngDelta < 0 Then lngTimer = Timer
+            
+		End If
+	Loop
+    
+	'Reset error
+	On Error GoTo 0
+End Function
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: SiebelGoTo (objSiebScreenViews, strView, strLevel)
+'@Description Function to navigate to a view at a specified level and sync with the navigated screen
+'@Documentation This function with the SiebScreenViews object <objSiebScreenViews> navigates to view <strView> at level <strLevel> and sync with the view
+'Return value: Type boolean. Success of view navigation
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function SiebelGoTo (ByRef objSiebScreenViews, ByRef strView, ByRef strLevel)
+
+	'Navigate to view at the given level
+	objSiebScreenViews.GoTo strView, strLevel
+
+	'Report the step to the log file
+	TestReport.ReportStep "Navigate to view on the Siebel screen '" & objSiebScreenViews.GetROProperty("repositoryname") & "'",strView & " at level " & strLevel
+
+	'Sync with the navigated screen
+	SiebelGoTo = objSiebScreenViews.WaitProperty("activeview", strView ,30000)
+		
+End Function
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: SiebPickListVerify (objSiebPickList,arrLOV)
+'@Description Function verify the LOV items in Siebel PickList object
+'@Documentation The LOV items in argument <arrLOV> is verified for availability in picklist  argument <objSiebPickList>
+'Return value: N/A
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function SiebPickListVerify(ByRef objSiebPickList, ByRef arrLOV)
+
+   'Variables
+   Dim intCount	'as Integer
+   Dim intCounter	'as Integer
+   Dim strUIName	'as String
+
+   'Disable error handling
+   On Error Resume Next
+
+	'Count and UIname value
+	intCount = objSiebPickList.Count
+	strUIName = objSiebPickList.UIName
+
+	'Validate the count of LOV items
+	If Not IsArray(arrLOV) Then TestReport.ReportEvent micWarning,"The input argument for LOVs is not an array","Validations skipped"
+    	StringCompare (UBound(arrLOV) + 1),intCount,"0:The expected count of LOVs available for siebel pick list - " & strUIName,"1:The expected count of LOVs not available for siebel pick list - " & strUIName 
+
+	'Check for individual items
+    For intCounter = 0 To UBound(arrLOV)
+
+		'Validation of picklist value
+		StringCompare True,objSiebPickList.IsExists(arrLOV(intCounter)),"0:The following """ & arrLOV(intCounter) & """ LOV item is available in picklist - " & strUIName , _
+		"1:The following """ & arrLOV(intCounter) & """ LOV item is not available in picklist - " & strUIName 
+
+	Next
+
+	'Reset error handling
+   On Error GoTo 0
+   
+End Function
+
+ 
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: SiebScreenViewExist(objSiebScreenViews)	
+'Description:  Function to wait till the SiebScreenViews or SiebView or SiebApplet appears.
+'Return Value:  None
+
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function SiebScreenViewExist(objSiebScreenViews) 
+	'declare variables
+	Dim blnState 'as String
+	Dim intCounter	'as Integer
+	intCounter = 0
+	Do 
+		blnState = objSiebScreenViews.Exist 
+		If blnState Then Exit Function 
+		Wait 1 
+		intCounter = intCounter+1
+	Loop Until intCounter >= 120
+
+	'Report error when sync didn't happen
+	TestReport.ReportEvent micFail,"The sync point failed for the object","Object type = " & objSiebScreenViews.GetTOProperty("classname")
+End Function
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebWebButtonClick (objSiebWebButton)
+'@Description  Method simillar to SiebWebButton.Click but with report documentation steps
+'@Documentation  This method clicks on <objSiebWebButton> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebWebButtonClick (objSiebWebButton)
+
+	objSiebWebButton.Click
+	TestReport.ReportStep "Click '" & objSiebWebButton.GetROProperty("repositoryname") & "' Siebel web button",""
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebButtonClick (objSiebButton)
+'@Description  Method simillar to SiebButton.Click but with report documentation steps
+'@Documentation  This method clicks on <objSiebButton> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebButtonClick (objSiebButton)
+
+	objSiebButton.Click
+	TestReport.ReportStep "Click '" & objSiebButton.GetROProperty("repositoryname") & "' Siebel button",""
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebMenuSelect (objSiebMenu,strItem)
+'@Description  Method simillar to SiebMenu.Select but with report documentation steps
+'@Documentation  This method selects <strItem> on <objSiebMenu> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebMenuSelect (objSiebMenu,strItem)
+
+	objSiebMenu.Select strItem
+	TestReport.ReportStep "Select item from Siebel menu '" & objSiebMenu.GetROProperty("repositoryname") & "'",strItem
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebTextSetText(objSiebText,strText)
+'@Description  Method simillar to SiebText.SetText but with report documentation steps
+'@Documentation  This method sets <strText> on <objSiebText> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebTextSetText(objSiebText,strText)
+
+	objSiebText.SetText strText
+	TestReport.ReportStep "Enter value in Siebel text edit field '" & objSiebText.GetROProperty("repositoryname") & "'",strText
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebPDQSelect(objSiebPDQ,strSelect)
+'@Description  Method simillar to SiebPDQ.Select but with report documentation steps
+'@Documentation  This method selects <strSelect> in the PDQ <objSiebPDQ> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebPDQSelect(objSiebPDQ,strSelect)
+
+	objSiebPDQ.Select strSelect
+	TestReport.ReportStep "Select item in the PDQ list '" & objSiebPDQ.GetROProperty("repositoryname") & "'",strSelect
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebPicklistSelect(objSiebPicklist,strSelect)
+'@Description  Method simillar to SiebPicklist.Select but with report documentation steps
+'@Documentation  This method selects <strSelect> in the pick list <objSiebPicklist> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebPicklistSelect(objSiebPicklist,strSelect)
+
+	objSiebPicklist.Select strSelect
+	TestReport.ReportStep "Select item in the Siebel pick list '" & objSiebPicklist.GetROProperty("repositoryname") & "'",strSelect
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebPicklistSetText(objSiebPicklist,strSetText)
+'@Description  Method simillar to SiebPicklist.SetText but with report documentation steps
+'@Documentation  This method sets <strSetText> in the pick list <objSiebPicklist> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebPicklistSetText(objSiebPicklist,strSetText)
+
+	objSiebPicklist.SetText strSetText
+	TestReport.ReportStep "Set text in the Siebel pick list '" & objSiebPicklist.GetROProperty("repositoryname") & "'",strSetText
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebToolbarClick(objSiebToolbar, strItem)
+'@Description  Method simillar to SiebToolbar.Click but with report documentation steps
+'@Documentation  This method clicks on <strItem> on the toolbar <objSiebToolbar> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebToolbarClick(objSiebToolbar, strItem)
+
+	objSiebToolbar.Click strItem
+	TestReport.ReportStep "Click the item on Siebel toolbar '" & objSiebToolbar.GetROProperty("repositoryname") & "'",strItem
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SblPickListSelect(objSblPickList,strSelect)
+'@Description  Method simillar to SblPicklist.Select but with report documentation steps
+'@Documentation  This method selects <strSelect> in the pick list <objSblPickList> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SblPickListSelect(objSblPickList,strSelect)
+
+	objSblPickList.Select strSelect
+	TestReport.ReportStep "Select item in the Siebel pick list '" & objSblPickList.GetROProperty("repositoryname") & "'",strSelect
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SblEditSet(objSblEdit,strText)
+'@Description  Method simillar to SblEdit.Set but with report documentation steps
+'@Documentation  This method sets <strText> on <objSblEdit> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SblEditSet(objSblEdit,strText)
+
+	objSblEdit.Set strText
+	TestReport.ReportStep "Enter value in Siebel edit field '" & objSblEdit.GetROProperty("repositoryname") & "'",strText
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SblButtonClick(objSblButton)
+'@Description  Method simillar to SblButton.Click but with report documentation steps
+'@Documentation  This method clicks on the  <objSblButton> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SblButtonClick(objSblButton)
+
+	objSblButton.Click
+	TestReport.ReportStep "Click '" & objSblButton.GetROProperty("repositoryname") & "' Siebel button",""
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebListActivateRow(objSiebList,lngRow)
+'@Description  Method simillar to SiebList.ActivateRow but with report documentation steps
+'@Documentation  This method activates the <lngRow> on the <objSiebList> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebListActivateRow(objSiebList,lngRow)
+
+	objSiebList.ActivateRow lngRow
+	TestReport.ReportStep "Select and activate the row in Siebel list '" & objSiebList.GetROProperty("repositoryname") & "'",lngRow
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebListDrillDownColumn(objSiebList, strColName, lngRow)
+'@Description  Method simillar to SiebList.DrillDownColumn but with report documentation steps
+'@Documentation  This method drillsdown on the <strColumn> at the <lngRow> on the <objSiebList> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebListDrillDownColumn(objSiebList, strColName, lngRow)
+
+	objSiebList.DrillDownColumn strColName, lngRow
+	TestReport.ReportStep "Drilldown on column '" & strColName & "' in the Siebel list '" & objSiebList.GetROProperty("repositoryname") & "' on the row" ,lngRow
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebCheckboxSetOff(objSiebCheckBox)
+'@Description  Method simillar to SiebCheckbox.SetOff but with report documentation steps
+'@Documentation  This method checks OFF the checkbox on the <objSiebCheckBox> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebCheckboxSetOff(objSiebCheckBox)
+
+	objSiebCheckBox.SetOff
+	TestReport.ReportStep "Set the checkbox '" & objSiebCheckBox.GetROProperty("repositoryname") & "'","OFF"
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebCheckboxSetOn(objSiebCheckBox)
+'@Description  Method simillar to SiebCheckbox.SetOn but with report documentation steps
+'@Documentation  This method checks ON the checkbox on the <objSiebCheckBox> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebCheckboxSetOn(objSiebCheckBox)
+
+	objSiebCheckBox.SetOn
+	TestReport.ReportStep "Set the checkbox '" & objSiebCheckBox.GetROProperty("repositoryname") & "'","ON"
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebTextAreaSetText(objSiebTextArea,strText)
+'@Description  Method simillar to SiebText.SetText but with report documentation steps
+'@Documentation  This method sets <strText> on <objSiebTextArea> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebTextAreaSetText(objSiebTextArea,strText)
+
+	objSiebTextArea.SetText strText
+	TestReport.ReportStep "Enter value in Siebel text area edit field '" & objSiebTextArea.GetROProperty("repositoryname") & "'",strText
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebTextProcessKey (objSiebText,strKey)
+'@Description  Method simillar to SiebText.ProcessKey  but with report documentation steps
+'@Documentation  This method with focus on  <objSiebText> enters the keystroke <strKey> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebTextProcessKey (objSiebText,strKey)
+
+	objSiebText.ProcessKey strKey
+	TestReport.ReportStep "Send the keystrokes with focus on Siebel text field '" & objSiebText.GetROProperty("repositoryname") & "'",strKey
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebTextOpenPopup (objSiebText)
+'@Description  Method simillar to SiebText.OpenPopup  but with report documentation steps
+'@Documentation  This method will open popup window with focus on  <objSiebText> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebTextOpenPopup (objSiebText)
+
+   Dim objApp	'as object
+   Dim strTemp
+
+	If IE_VERSION = 8 Then
+
+		'Unregister process key function
+		UnRegisterUserFunc  "SiebApplication", "ProcessKeyboardAccelerator"
+
+		'get applet object
+		Set objApp = objSiebText.GetTOProperty("parent")
+        
+		'Based on applet
+		If objApp.GetROProperty("micclass") = "SiebApplet" Then
+			strTemp = objApp.GetROProperty("repositoryname") & "." & objSiebText.GetROProperty("repositoryname")
+			SiebApplication("Siebel Call Center").ProcessKeyboardAccelerator "F2", strTemp
+			SiebApplication("Siebel Call Center").Sync
+		ElseIf objApp.GetROProperty("micclass") = "SiebList" Then
+			Set objApp = objApp.GetTOProperty("parent")
+			strTemp = objApp.GetROProperty("repositoryname") & ".SiebList." & objSiebText.GetROProperty("repositoryname")			
+			SiebApplication("Siebel Call Center").ProcessKeyboardAccelerator "F2", strTemp
+			SiebApplication("Siebel Call Center").Sync
+		End If
+
+		'Rgister process key function
+		RegisterUserFunc "SiebApplication", "ProcessKeyboardAccelerator", "Custom_SiebApplicationProcessKeyboardAccelerator"
+	Else
+			objSiebText.OpenPopup
+			SiebApplication("Siebel Call Center").Sync
+	End If
+
+	'Report to custom report
+	TestReport.ReportStep "Open the popup window on the Siebel text field '" & objSiebText.GetROProperty("repositoryname") & "'",""
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_SiebApplicationProcessKeyboardAccelerator (objSiebApplication,strKey)
+'@Description  Method simillar to SiebApplication.ProcessKeyboardAccelerator  but with report documentation steps
+'@Documentation  This method with focus on  <objSiebApplication> enters the keystroke <strKey> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_SiebApplicationProcessKeyboardAccelerator (objSiebApplication,strKey)
+
+	objSiebApplication.ProcessKeyboardAccelerator strKey
+	TestReport.ReportStep "Send the keystrokes with focus on Siebel application '" & objSiebApplication.GetROProperty("repositoryname") & "'",strKey
+
+End Sub
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: IsColumnExists(objTable, strColumnName)
+'@Description: Function is simular to the .ColumnExist menthod as this causes problem in QTP 9.5 & IE 6.0
+'@Documentation: Function checks if the specified column exists in the table object passed as parameter. 
+'Return Value: Boolean - Indicates if the column exist or not
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Function IsColumnExists(objTable, strColumnName)
+
+		Dim intColumnCounter		' as Integer
+		Dim strCurrentColumn		' as String
+
+		' Make False by default
+		IsColumnExists = False
+
+		' Loop thru each column in the table
+		For intColumnCounter = 0 To objTable.GetROProperty("cols") - 1
+	
+				' Get the column name
+				strCurrentColumn = objTable.Object.Rows(0).Cells(intColumnCounter).InnerText
+
+				' Compare the column name, if match found then exit
+				If Trim(UCase(strCurrentColumn)) = Trim(UCase(strColumnName)) Then IsColumnExists = True: Exit For
+
+		Next
+		
+End Function
+
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Quit(objBrowser)
+'@Description: Function closes the specified browser directly using the windows
+'@Documentation: Function closes the specified browser directly using the windows
+'Return Value: None
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Quit(objBrowser)
+
+		Dim objShell		' as Objects
+		Dim objShellApp	 ' as Objects
+		Dim objWindow	 ' as Objects
+	
+		Set objShell = CreateObject("WScript.Shell")
+		Set objShellApp = CreateObject("Shell.Application")
+	
+		Call Wait(2)
+	
+		objBrowser.Sync
+
+		' Loop for each open application	
+		For Each objWindow In objShellApp.Windows
+
+				' If the application is a browser then
+				If TypeName(objWindow.Document) = "HTMLDocument" Then
+
+						' Check if the URL of both the functions match, if match is found then close the window.
+						If objWindow.LocationURL = objBrowser.GetROProperty("url") Then objWindow.Quit: Exit For
+			
+				End If
+				
+		Next
+	
+		Set objShell = Nothing
+		Set objShellApp = Nothing
+	
+		Call Wait(10)
+	
+End Sub
+
+
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: MySortUp(objTable, strColumnName)
+'@Description: Function is simular to the .SortUp menthod as this causes problem in QTP 9.5 & IE 6.0
+'@Documentation: Function sorts accoding to the specified column. 
+'Return Value: Boolean - Indicates if the sort is success or not
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Function MySortUp(objTable, strColumnName)
+
+		Dim intColumnCounter		' as Integer
+		Dim strCurrentColumn		' as String
+		Dim blnColumnFound			' as Boolean
+		Dim objSortButton				' as HTML Object
+
+		' Make False by default
+		MySortUp = False
+
+		' Loop thru each column in the table
+		For intColumnCounter = 0 To objTable.GetROProperty("cols") - 1
+	
+				' Get the column name
+				strCurrentColumn = objTable.Object.Rows(0).Cells(intColumnCounter).InnerText
+
+				' Compare the column name, if match found then exit
+				If Trim(UCase(strCurrentColumn)) = Trim(UCase(strColumnName)) Then blnColumnFound = True: Exit For
+
+		Next
+
+		' If the column is NOT found, then Exit the function
+		If NOT blnColumnFound Then Exit Function
+
+		' Loop thru each sort images
+		For Each objSortButton In objTable.Object.Rows(0).Cells(intColumnCounter).GetElementsByTagName("IMG")
+
+				' If the required sort image is found,then click on it and exit the loop
+				If objSortButton.GetAttribute("alt") = "Sort ascending" Then 
+						objSortButton.Click
+						MySortUp = True
+						Exit For
+				End If
+
+		Next
+				
+End Function
+
+
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: MySortDown(objTable, strColumnName)
+'@Description: Function is simular to the .SortDown menthod as this causes problem in QTP 9.5 & IE 6.0
+'@Documentation: Function sorts accoding to the specified column. 
+'Return Value: Boolean - Indicates if the sort is success or not
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Function MySortDown(objTable, strColumnName)
+
+		Dim intColumnCounter		' as Integer
+		Dim strCurrentColumn		' as String
+		Dim blnColumnFound			' as Boolean
+		Dim objSortButton				' as HTML Object
+
+		' Make False by default
+		MySortDown = False
+
+		' Loop thru each column in the table
+		For intColumnCounter = 0 To objTable.GetROProperty("cols") - 1
+	
+				' Get the column name
+				strCurrentColumn = objTable.Object.Rows(0).Cells(intColumnCounter).InnerText
+
+				' Compare the column name, if match found then exit
+				If Trim(UCase(strCurrentColumn)) = Trim(UCase(strColumnName)) Then blnColumnFound = True: Exit For
+
+		Next
+
+		' If the column is NOT found, then Exit the function
+		If NOT blnColumnFound Then Exit Function
+
+		' Loop thru each sort images
+		For Each objSortButton In objTable.Object.Rows(0).Cells(intColumnCounter).GetElementsByTagName("IMG")
+
+				' If the required sort image is found,then click on it and exit the loop
+				If objSortButton.GetAttribute("alt") = "Sort descending" Then 
+						objSortButton.Click
+						MySortDown = True
+						Exit For
+				End If
+
+		Next
+				
+End Function
+
+
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: OpenMyCellElement(objTable, strColumnName)
+'@Description: Function is simular to the .SortDown menthod as this causes problem in QTP 9.5 & IE 6.0
+'@Documentation: Function sorts accoding to the specified column. 
+'Return Value: Boolean - Indicates if the sort is success or not
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub OpenMyCellElement(objTable, intRow, strColumnName)
+
+	Dim intColumnCounter		' as Integer
+	Dim strCurrentColumn		' as String
+
+	' Loop thru each column in the table
+	For intColumnCounter = 0 To objTable.GetROProperty("cols") - 1
+
+		' Get the column name
+		strCurrentColumn = objTable.Object.Rows(0).Cells(intColumnCounter).InnerText
+
+		' Compare the column name, if match found then exit
+		If Trim(UCase(strCurrentColumn)) = Trim(UCase(strColumnName)) Then
+			objTable.Object.Rows(intRow-1).Cells(intColumnCounter).getElementsByTagName("IMG")(0).Click
+			Exit For
+		End If
+	Next
+
+	
+End Sub

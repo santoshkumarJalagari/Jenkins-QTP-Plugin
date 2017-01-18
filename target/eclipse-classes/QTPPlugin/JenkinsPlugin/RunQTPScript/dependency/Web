@@ -1,0 +1,832 @@
+'Registered web functions for documenting navigational steps
+RegisterUserFunc "Browser","Navigate","Custom_BrowserNavigate"
+RegisterUserFunc "Browser","Close","Custom_BrowserClose"
+RegisterUserFunc "WebButton","Click","Custom_WebButtonClick"
+RegisterUserFunc "WebEdit","Set","Custom_WebEditSet"
+RegisterUserFunc "WebList","Set","Custom_WebListSet"
+RegisterUserFunc "WebCheckBox","Set","Custom_WebCheckBoxSet"
+RegisterUserFunc "Link","Click","Custom_LinkClick"
+RegisterUserFunc "WebList","Select","Custom_WebListSelect"
+RegisterUserFunc "Image","Click","Custom_ImageClick"
+RegisterUserFunc "WinButton","Click","Custom_WinButtonClick" 
+RegisterUserFunc "WebFile","Set","Custom_WebFileSet"
+RegisterUserFunc "WebRadioGroup","Select","Custom_WebRadioGroupSelect" 
+RegisterUserFunc "JavaButton", "Click", "Custom_JavaButtonClick"
+RegisterUserFunc "JavaEdit", "Set", "Custom_JavaEditSet"
+RegisterUserFunc "JavaMenu", "Select", "Custom_JavaMenuSelect"
+RegisterUserFunc "JavaList", "Select", "Custom_JavaListSelect"
+RegisterUserFunc "JavaTab", "Select", "Custom_JavaTabSelect"
+
+'Register this function on Browser and Page object 
+RegisterUserFunc "Browser", "Ready", "BrowserPageReady" 
+RegisterUserFunc "Page", "Ready", "BrowserPageReady" 
+RegisterUserFunc "Frame", "Ready", "BrowserPageReady"
+
+'Register SetBrowserLangauge sub to the browser object
+RegisterUserFunc "Browser","SetLanguage","SetBrowserLanguage"
+
+'Rebister OpenNewBrowserWindow sub to the browser object
+RegisterUserFunc "Browser","OpenNewWindow","OpenNewBrowserWindow"
+
+'User defined method for wait step
+RegisterUserFunc "WebElement", "PleaseWiat", "PleaseWaitFunc"
+
+'WebService registered functions
+RegisterUserFunc "WebService", "SendCustomRequest", "WebServiceRequestHandler"
+
+
+'=========================== WEB Functions ==================================================================
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: InvokeIENavigate(strURL)	
+'@Description  Function to create new instance of internet browser with open url equals "about:Blank"
+'@Documentation  This function will create a new instance of internet explorer and navigates to given <strURL>
+'Return Value:  Type Boolean. If browser successfuly opened and naviaged to the given url.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function InvokeIENavigate(ByRef strURL)
+
+	Dim objWShell	'as Wscript shell object
+	Dim objShellApp	'as Shell Application Object
+	Dim objWin	'as Window Object
+	Dim objIE	'as Ineternet explorer object
+	Dim blnFunction	'as Boolean
+	Dim intCounter ' as Integer
+	Dim blnBrowserIdentified ' as Boolean
+
+    'Create instance of objects
+	Set objWShell = CreateObject("WScript.Shell")
+	Set objShellApp = CreateObject("Shell.Application")
+	Set objIE = Nothing
+
+	'Set function status
+	blnFunction = False
+
+	'Create a internet explorer application with "about:Blank" URL
+	Call objWShell.Run("IExplore about:Blank", 1, False)
+
+	'Identify the browser version
+	IE_VERSION = CInt(DotNetFactory.CreateInstance("System.Windows.Forms.WebBrowser").Version.Major)
+
+    blnBrowserIdentified = False
+	' Loop until the browser is identified (with a timeout for 10 seconds)
+	Do
+
+            ' Increment the counter, which represents the number of seconds for browser identification timeout.
+			intCounter = intCounter + 1
+			Call Wait(1)
+		
+			'For each of the internet explorer windows, check for current opened one and return the object
+			For Each objWin In objShellApp.Windows
+				If TypeName(objWin.Document) = "HTMLDocument" Then
+		
+					If InStr(1,objWin.LocationURL,"about:Blank") >= 1 Then Set objIE = objWin: blnBrowserIdentified = True: Exit For
+				
+				End If
+			Next
+
+			' If the Browser is identified then navigate to the requested URL and exit the Loop
+			If blnBrowserIdentified Then
+					'Navigate to given url
+					objIE.Navigate strURL
+					
+					'Wait till naviagtion is complete
+					Do While objIE.Busy
+					Loop
+			
+					'Function status
+					blnFunction = True
+
+					TestReport.ReportEvent micDone, "Newly Invoked Browser Identified", "InvokeIENavigate successfully recognized the opened browser after " & intCounter & " Seconds."
+					' Exit the loop		
+					Exit Do
+			End If
+
+			'Report error if browser opened couldn't be identified for 10 seconds and exit the loop.
+			If Not blnBrowserIdentified And intCounter > 10  Then
+					TestReport.ReportEvent micWarning,"InvokeIENavigate function failed to recogonize opened browser, even after waiting for " & intCounter & " Seconds.","The " & strURL & " navigation aborted"
+					Exit Do
+			End If
+
+	Loop
+
+	'Release objects
+	Set objWShell = Nothing
+	Set objShellApp = Nothing
+	Set objIE = Nothing
+
+	'Function return value
+	InvokeIENavigate = blnFunction
+	
+End Function
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: IECleanUp(strInput)	
+'@Description  Function to clear cookies, cache or both of Internet Explorer
+'@Documentation  If <strInput> is "Cookies" clears cookies, if "Cache" clears cache and if "All"  or any other strring value clears both cache and cookies
+'Return Value:  None
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function IECleanUp(strInput)
+	'Disable error handling
+	On Error Resume Next
+   
+   'Delclare Varaiables
+	Const COOKIES = "&H21&"
+	Const TEMPORARY_INTERNET_FILES = "&H20&"
+	Dim objShell	'as Object Shell
+	Dim objFolder	'as Object Folder
+	Dim objFolderItem	'as Object Folder Items
+	Dim strCookiePath	'as String
+	Dim strTempFilePath	'as String
+	Dim objFSO 'as File System Object
+
+	'Set File system object
+	Set objFSO = CreateObject("Scripting.FileSystemObject")
+	
+	'The cookies path
+	Set objShell = CreateObject("Shell.Application")
+	Set objFolder = objShell.Namespace(COOKIES)
+	Set objFolderItem = objFolder.Self
+	strCookiePath = objFolderItem.Path & "\*.txt"
+
+	'The Temp Files path
+	Set objFolder = objShell.Namespace(TEMPORARY_INTERNET_FILES)
+	Set objFolderItem = objFolder.Self
+	strTempFilePath = objFolderItem.Path & "\*.*"
+
+	'Based on Input clear cookies and Cache
+	Select Case UCase(Trim(strInput))
+		Case "COOKIES" objFSO.DeleteFile(strCookiePath)
+		Case "CACHE" objFSO.DeleteFile(strTempFilePath)
+		Case "ALL" objFSO.DeleteFile(strCookiePath) : objFSO.DeleteFile(strTempFilePath)
+		Case Else objFSO.DeleteFile(strCookiePath) : objFSO.DeleteFile(strTempFilePath)
+	End Select
+	
+	'Release objects
+	Set objFolderItem = Nothing
+	Set objFolder = Nothing
+	Set objFSO = Nothing
+	Set objShell = Nothing
+
+	'Enable error handling
+	On Error GoTo 0
+End Function
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: BrowserPageReady(objBrowserPage)	
+'Description:  Function to wait till the Page or Browser attains the ready state
+'Return Value:  None
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function BrowserPageReady(objBrowserPage) 
+	Call Wait(2)
+	'declare variables
+	Dim strState 'as String
+	Dim intCounter	'as Integer
+	intCounter = 0
+	Do While intCounter < 120
+		strState = objBrowserPage.Object.readyState 
+		If UCase(Trim(strState)) = "COMPLETE" OR Trim(strState) = "4" Then Exit Function 
+		Wait 1 
+		intCounter = intCounter+1
+	Loop 
+
+	'Report error when sync didn't happen
+	TestReport.ReportEvent micFail,"The sync point failed for the object","Object type = " & objBrowserPage.GetTOProperty("micclass")
+End Function 
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: SetBrowserLanguage(objBrowser,strLanguage)	
+'@Description  Sub routine to set the specified language to be the first IE 6 browser language
+'@Documentation  This sub routine will set <strLanguage>  as the first language for the given browser <objBrowser>
+'Return Value:  None
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Sub SetBrowserLanguage(ByRef objBrowser,ByRef strLanguage)
+
+	'Variables
+	Dim blnLangInList	'as Boolean
+	Dim objRegExp	'as Regular Expression Object
+	Dim strlang	'as String
+	Dim intCounter	'as Integer
+	Dim arrExclusion	'as Array
+    
+    'Intialize variables
+	blnLangInList = False
+	strLang = strLanguage
+	arrExclusion = Array("[","]","(",")",".")
+	For intCounter = 0 To UBound(arrExclusion) - 1
+		strLang = Replace(strLang,arrExclusion(intCounter),"\" & arrExclusion(intCounter))
+	Next
+    
+	'in the browser object
+	With objBrowser
+
+		'Set the reular expression pattern
+		Set objRegExp = New RegExp
+		objRegExp.Global = True
+        objRegExp.Pattern = "(\b|\012)" & strLang & "(\012|$)"
+        
+		'If Browser exist do the actions
+		If .Exist(3) Then
+		
+			'Open the internet options dialog
+			.WinToolbar("nativeclass:=ToolbarWindow32","window id:=0","Location:=0").Press "&Tools"
+			.WinMenu("menuobjtype:=3").Select "Internet Options..."
+	
+			'with the options dialog
+			With .Dialog("text:=Internet Options","nativeclass:=#32770")
+	
+				'Open the languages list dialog
+				.WinButton("text:=&Languages...").Click
+	
+				'With the lanaguage dialog
+				With .Dialog("text:=Language Preference","nativeclass:=#32770")
+					
+					'Verify the languages available in lanaguage list
+					If objRegExp.Execute(.WinList("attached text:=&Language:").GetContent).Count = 1 Then
+	
+						blnLangInList = True
+	
+					Else	
+	
+						'Open the language add dialog
+						.WinButton("text:=&Add...").Click
+	
+						'With add language dialog
+						With .Dialog("text:=Add Language","nativeclass:=#32770")
+							
+							'if the language available in add list then add else cancel the dialog
+							If objRegExp.Execute(.WinList("attached text:=&Language:").GetContent).Count = 1 Then
+	
+								'Select the lanaguage and add to list
+								.WinList("attached text:=&Language:").Select strLanguage
+								.WinButton("text:=OK").Click
+								blnLangInList = True
+								
+							Else
+							
+								'Cancel the add dialog when language not found
+								.WinButton("text:=Cancel").Click
+								
+							End If
+	
+						End With
+	
+					End If
+	
+					'If Language in list then set it as first language in list
+					If blnLangInList Then
+	
+						'Select the language
+						.WinList("attached text:=&Language:").Select strLanguage
+	
+						'Move language upto top of list
+						While .WinButton("text:=Move &Up").GetROProperty("enabled")
+							.WinButton("text:=Move &Up").Click
+						Wend
+	
+						'Click okay
+						.WinButton("text:=OK").Click
+
+						'Report event
+						TestReport.ReportEvent micDone,"The browser first index language set to specified input lanaguge","Set to language - " & strLanguage
+	
+					Else
+	
+						'Cancel the language dialog
+						.WinButton("text:=Cancel").Click
+
+						'Report event
+						TestReport.ReportEvent micWarning,"The browser first index language was not set to specified input lanaguge","Failure to set language - " & strLanguage
+						
+					End If
+	
+				End with
+	
+
+				'Wait till the object is enabled to avoid "Object Disabled" error
+				.WaitProperty "enabled", "True", 300000
+				'Close the options dialog
+				.WinButton("text:=OK").Click
+				Wait 3
+
+
+'				'Check for any open dialogs
+'				While .Exist(0)
+'
+'					.Type micEsc
+'
+'				Wend
+
+				'Relese regexp object
+				Set objRegExp = Nothing
+				
+			End with
+
+		Else
+
+			'Report warning when no browser available
+			TestReport.ReportEvent micWarning,"The browser not available to change language settings","Check for unique browser"
+		
+		End If
+			
+	End with
+		
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function:  OpenNewBrowserWindow(objBrowser)
+'Description:  Function to open the new browser window to the specified browser. This function is tested on IE 6.0 only.
+'Return Value:  None
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Sub OpenNewBrowserWindow(objBrowser)
+	 	
+	With objBrowser
+
+		'Open File Menu for the specified browser
+		.WinToolbar("nativeclass:=ToolbarWindow32", "window id:=0", "windowstyle:=1442895949").Press "&File"
+		
+		'Click on New and select Window option
+		.WinMenu("menuobjtype:=3").Select "New;Window 	Ctrl+N"
+
+	End with
+		
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: PleaseWaitFunc(ByRef objWebElement)
+'@Description Wait step for RegOnce application.
+'@Documentation Wiats till the web element "Please Wait......" exists on the application
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub PleaseWaitFunc(ByRef objWebElement)
+   Dim intTimer
+	intTimer=Timer
+	Do While objWebElement.Exist
+			Wait 2
+		If Timer-intTimer>500 Then
+			Exit Do
+			TestReport.ReportEvent micFail,"Application is very slow","Application is taking more than 500secs to perform the action"
+		End If
+    Loop
+End Sub 
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: OutClipboard()	
+'@Description  Function to get clipboard text content using internet application object
+'@Documentation  This function return the clipboard text content
+'Return Value:  Type String. Text content from the clipboard
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function OutClipboard()
+
+	Dim objIE	'as internet application
+
+	'Create IE object
+	Set objIE = CreateObject("InternetExplorer.Application")
+
+	'Navigate to blank url and get text content
+	objIE.Navigate("about:blank")
+	OutClipboard = objIE.document.parentwindow.clipboardData.GetData("text")
+
+	'Quit and close IE object
+	objIE.Quit
+	Set objIE = Nothing
+
+End function
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_BrowserNavigate(objBrowser,strURL)
+'@Description  Method simillar to Browser.Navigate but with report documentation steps
+'@Documentation  This method navigates to <strURL> in the browser <objBrowser> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_BrowserNavigate(objBrowser,strURL)
+
+	objBrowser.Navigate strURL
+	TestReport.ReportStep "Navigate to URL", strURL
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_BrowserClose(objBrowser)
+'@Description  Method simillar to Browser.Close but with report documentation steps
+'@Documentation  This method closes the browser <objBrowser> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_BrowserClose(objBrowser)
+
+	TestReport.ReportStep "Close '" & objBrowser.GetROProperty("name") & "' browser", ""
+	objBrowser.Close
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_WebButtonClick(objWebButton)
+'@Description  Method simillar to WebButton.Click but with report documentation steps
+'@Documentation  This method clicks on the <objWebButton> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_WebButtonClick(objWebButton)
+
+	objWebButton.Click
+    TestReport.ReportStep "Click '" & objWebButton.GetROProperty("name") & "' web button",""
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_WebEditSet(objWebEdit,strVal)
+'@Description  Method simillar to WebEdit.Set but with report documentation steps
+'@Documentation  This method set's the <strVal> on the <objWebEdit> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_WebEditSet(objWebEdit,strVal)
+
+	objWebEdit.Set strVal
+	TestReport.ReportStep "Enter value in edit field '" & objWebEdit.GetROProperty("name") & "'", strVal
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_WebListSet(objWebList,strVal)
+'@Description  Method simillar to WebList.Set but with report documentation steps
+'@Documentation  This method set's the <strVal> on the <objWebList> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_WebListSet(objWebList,strVal)
+
+	objWebList.Set strVal
+	TestReport.ReportStep "Set value in list '" & objWebList.GetROProperty("name") & "'",strVal
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_WebCheckBoxSet(objWebCheckBox,strVal)
+'@Description  Method simillar to WebCheckBox.Set but with report documentation steps
+'@Documentation  This method set's the <strVal> on the <objWebCheckBox> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_WebCheckBoxSet(objWebCheckBox,strVal)
+
+	objWebCheckBox.Set strVal
+	TestReport.ReportStep "Set the flag in checkbox '" & objWebCheckBox.GetROProperty("name") & "'",strVal
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_LinkClick(objLink)
+'@Description  Method simillar to Link.Click but with report documentation steps
+'@Documentation  This method clicks on <objLink> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_LinkClick(objLink)
+
+	TestReport.ReportStep "Click on the link '" & objLink.GetROProperty("text") & "'" , ""
+	objLink.Click
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_WebListSelect(objWebList,strItem)
+'@Description  Method simillar to WebList.Select but with report documentation steps
+'@Documentation  This method selects <strItem> on <objWebList> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_WebListSelect(objWebList,strItem)
+
+	objWebList.Select strItem
+	TestReport.ReportStep "Select item from web list '" & objWebList.GetROProperty("name") & "'",strItem
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_ImageClick(objImage)
+'@Description  Method simillar to Image.Click but with report documentation steps
+'@Documentation  This method clicks on the <objImage> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_ImageClick(objImage)
+
+	Dim arrTemp(2)	'as Array
+	Dim intC	'as Integer
+	Dim strTemp	'as String
+
+	'Click on the image
+	objImage.Click
+
+	'Generate the documentation step message
+	arrTemp(0) = "alt" : arrTemp(1) = "html id" : arrTemp(2) = "file name"
+	For intC = 0 To UBound(arrTemp)
+
+		strTemp = Trim(objImage.GetROProperty(arrTemp(intC)))
+		If Len(strTemp) > 0 Then Exit For
+        
+	Next
+
+	'Report the step
+	TestReport.ReportStep "Click on the image '" & strTemp & "'",""
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_WebFileSet(objWebFile, strPath)
+'@Description  Method simillar to WebFile.Set but with report documentation steps
+'@Documentation  This method would browse for the file <strPath> set it on <objWebFile> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_WebFileSet(objWebFile, strPath)
+
+
+	objWebFile.Set strPath
+	TestReport.ReportStep "Set the file path on this edit field '" & objWebFile.GetROProperty("name") & "'",strPath
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_WebRadioGroupSelect(objWebRadioGroup, strValue)
+'@Description  Method simillar to WebRadioGroup.Select but with report documentation steps
+'@Documentation  This method would select <strValue>  in the <objWebRadioGroup> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_WebRadioGroupSelect(objWebRadioGroup, strValue)
+
+
+	objWebRadioGroup.Select strValue
+	TestReport.ReportStep "Select the value on the web radio group '" & objWebRadioGroup.GetROProperty("name") & "'",strValue
+
+End Sub
+
+'=========================== WIN OBJECTS ==========================================================================================================
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_WinButtonClick(objWinButton)
+'@Description  Method simillar to WinButton.Click but with report documentation steps
+'@Documentation  This method click on <objWinButton> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_WinButtonClick(objWinButton)
+
+	objWinButton.Click
+	TestReport.ReportStep "Click on the win button '" & objWinButton.GetTOProperty("text") & "'" , ""
+
+End Sub
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_JavaEditSet(objWinButton)
+'@Description  Method simillar to javaEdit.Set but with report documentation steps
+'@Documentation  This method click on <objWinButton> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_JavaEditSet(objWebEdit, strVal)
+
+     objWebEdit.Set strVal
+    TestReport.ReportStep "Enter value in edit field '" & objWebEdit.GetROProperty("name") & "'", strVal
+End Sub
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_JavaMenuSelect (objWebLis,strItem)
+'@Description  Method simillar to JavaMenu.Select but with report documentation steps
+'@Documentation  This method selects <strItem> on <objSiebMenu> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_JavaMenuSelect(objJavaMenu)
+Dim temp
+ temp=objJavaMenu.GetROProperty("label")
+
+    objJavaMenu.Select
+    TestReport.ReportStep "Select item from Java menu '" & objJavaMenu.GetROProperty("repositoryname") & "'", temp
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_JavaListSelect(objWebList,strItem)
+'@Description  Method simillar to WebList.Select but with report documentation steps
+'@Documentation  This method selects <strItem> on <objWebList> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_JavaListSelect(objWebList, strItem)
+
+    objWebList.Select strItem
+    TestReport.ReportStep "Select item from Java list '" & objWebList.GetROProperty("name") & "'", strItem
+
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: Custom_JavaButtonClick(objWebButton)
+'@Description  Method simillar to WebButton.Click but with report documentation steps
+'@Documentation  This method clicks on the <objWebButton> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_JavaButtonClick(objWebButton)
+
+    objWebButton.Click
+    TestReport.ReportStep "Click '" & objWebButton.GetROProperty("name") & "'  button", ""
+
+End Sub
+
+'Function: Custom_JavaTabSelect(objWebList,strItem)
+'@Description  Method simillar to WebList.Select but with report documentation steps
+'@Documentation  This method selects <strItem> on <objWebList> and documentation step added.
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub Custom_JavaTabSelect(objWebList, strItem)
+
+    objWebList.Select strItem
+    TestReport.ReportStep "Select item from Java Tab '" & objWebList.GetROProperty("name") & "'", strItem
+
+End Sub'
+'=========================== WebService OBJECTS ==========================================================================================================
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: WebServiceRequestHandler(objWebService,arrIP)
+'@Description Function to handle WebService request, suppressing soap faults. Registered to WebService object as 'SendCustomRequest' function
+'@Documentation Web service calls made on <objWebService> object witb <arrIP> as arguments
+'Return Value:  None.
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function WebServiceRequestHandler(objWebService,arrIP)
+
+	Dim strCommand,strTempErrDes,strFormatedReq, strFormatedRes	'as String
+	Dim intTempErrNo	'as integer
+	Dim blnSOAPFault	'as Boolean
+	Dim arrOutput(2)
+	Dim objEventDesc
+    
+	On Error resume Next
+	
+	'Validate input arguments
+	If IsArray(arrIP) Then
+		If UBound(arrIP) < 1 Then TestReport.ReportEvent micFail,"WebServiceRequestHandler function exception #1. Array out of bound","The input array doesn't have enough elements"
+	Else
+		TestReport.ReportEvent micFail,"WebServiceRequestHandler function exception #2. Not array","The input argument is not an array"
+	End If
+
+	'If any other errors exit function
+	If Err.Number <> 0 Then 
+		TestReport.ReportEvent micFail,"WebServiceRequestHandler function exception #3. Unexpected exception", Err.Number & ": " & Err.Description
+		arrOutput(2) = Err.Number & ": " & Err.Description
+		Err.Clear
+	End If
+	
+	'Generate command to execute
+	strCommand = "objWebService." & Trim(arrIP(0)) & " arrIP(1)"
+
+	'Execute command and to ignore soap faults all QTP reports disabled
+	Reporter.Filter = rfDisableAll
+	Execute strCommand
+	intTempErrNo = Err.Number : strTempErrDes = Err.Description : Err.Clear
+    Reporter.Filter = rfEnableAll
+
+	'Collect the request and response
+	arrOutput(0) = objWebService.LastRequest
+	arrOutput(1) = objWebService.LastResponse
+
+	'Format XML tags to display correctly
+	If Len(arrOutput(0)) >= 1 Then strFormatedReq = Replace(Replace(Replace(arrOutput(0),"<","&lt"),">","&gt"),vbCrLf,"<br />")
+	If Len(arrOutput(1)) >= 1 Then strFormatedRes = Replace(Replace(Replace(arrOutput(1),"<","&lt"),">","&gt"),vbCrLf,"<br />")
+    
+	'Report step to custom report
+	Set objEventDesc = CreateObject("Scripting.Dictionary")
+	objEventDesc("ViewType") = "Sell.Explorer.2"
+	objEventDesc("Status") = micDone
+	objEventDesc("EnableFilter") = False
+	objEventDesc("NodeName") = "WebService custom report"
+	objEventDesc("StepHtmlInfo") = "<table border='1'><tr style='background-color:green'><td>Request</td><td>Response</td><tr><td>" & strFormatedReq & "</td><td>" & strFormatedRes & "</td></tr></table>"
+	Reporter.LogEvent  "Replay",objEventDesc,Reporter.GetContext
+	Set objEventDesc = Nothing
+	TestReport.ReportStep "The '" & Trim(arrIP(0)) & "' operation done on '" & objWebService.GetTOProperty("service") & "' pointing to URL " & objWebService.GetTOProperty("service url") , "<b>Request:</b><br />" & strFormatedReq & "<br /><b>Response:</b><br />" & strFormatedRes
+
+	'Determine soap fault error
+	blnSOAPFault = False
+	If intTempErrNo <> 0 Then
+		
+		If InStr(1,strTempErrDes,"Soap error:") >= 1 Then blnSOAPFault = True
+
+		'If not soap fault then report to output
+		If Not blnSOAPFault Then TestReport.ReportEvent micFail, "WebServiceRequestHandler function exception #4. Unexpected exception", intTempErrNo & ": " & strTempErrDes
+
+		'Clear any errors
+		Err.Clear
+
+	End If
+
+	'Look for any more errors
+    If Err.Number <> 0 Or (Not blnSOAPFault And intTempErrNo <> 0) Then
+		arrOutput(2) = arrOutput(2) & vbCrLf & intTempErrNo & ": " & strTempErrDes & vbCrLf & Err.Number & ": " & Err.Description
+	End If
+
+	'return output argument
+	WebServiceRequestHandler = arrOutput
+
+	On Error GoTo 0
+
+End Function
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: SendReceiveSOAPMessage(objFDI)	
+'@Description  Function to send and recieve a SOAP request response
+'@Documentation  The function takes dictionary object as input argument. See key details
+'@Documentation URL - The end point url
+'@Documentation SOAPPayload - The payload content to be sent with the input request
+'@Documentation SOAPAction - The SOAPAction name to be used in the SOAP request header
+'@Documentation SecurityCertificateFile - The path of the security file to be used
+'@Documentation SecurityCertificatePassword - The security certificate password
+'Return Value:  Type Dictionary. Returns a dictionary . Key details
+'SOAPResponse - The response recieved for the SOAP request
+'Status - The status of HTTP response
+'StatusText - The status text of the HTTP response
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Function SendReceiveSOAPMessage(objFDI)
+
+	Dim objFDO,objFDM	'as dictionary object
+	Dim X509Certificate, CertificateStore
+	Dim WinHTTP, objEventDesc
+	Dim strCertificateFile, strFormatedPayload, strFormatedRes
+	Const  WinHttpRequestOption_SslErrorIgnoreFlags = 4
+
+	'Enable continue on error
+	On Error Resume Next
+
+	'Instantiate a return dictionary and return it
+	Set objFDO = CreateObject("Scripting.Dictionary")
+	Set objFDM = CreateObject("Scripting.Dictionary")
+	Set SendReceiveSOAPMessage = objFDO
+
+	'Function messages
+	objFDM("SendReceiveSOAPMessage function exception #1") = "SendReceiveSOAPMessage function exception #1. Missing SOAPAction value"
+	objFDM("SendReceiveSOAPMessage function exception #2") = "SendReceiveSOAPMessage function exception #2. Unexpected exception sending request"
+	objFDM("SendReceiveSOAPMessage function warning #1") = "SendReceiveSOAPMessage function warning #1. Server certificate error"	
+
+	'Check for input argument
+	If objFDI("SecurityCertificateFile") <> "" Then strCertificateFile = PathFinder.Locate(objFDI("SecurityCertificateFile"))
+
+	'Check for soap action value
+	If objFDI("SOAPAction") = "" Then
+		TestReport.ReportEvent micFail, objFDM("SendReceiveSOAPMessage function exception #1"), "The SOAPAction value missing, function exited"
+		Exit Function
+	End If
+    
+	'Load the certificate file
+	If strCertificateFile <> "" Then
+		Set X509Certificate = DotNetFactory.CreateInstance("System.Security.Cryptography.X509Certificates.X509Certificate2") 
+		X509Certificate.Import strCertificateFile,objFDI("SecurityCertificatePassword") ,DotNetFactory.CreateInstance("System.Security.Cryptography.X509Certificates.X509KeyStorageFlags").DefaultKeySet
+	
+		Set CertificateStore = DotNetFactory.CreateInstance("System.Security.Cryptography.X509Certificates.X509Store",,"QATEST")
+		CertificateStore.Open(DotNetFactory.CreateInstance("System.Security.Cryptography.X509Certificates.OpenFlags").ReadWrite)
+		CertificateStore.Add X509Certificate
+		CertificateStore.Close
+	End If
+
+	'Create WINHttp object
+	Set WinHTTP = CreateObject("WinHttp.WinHttpRequest.5.1")
+
+	'Open the HTTP connection to the end point url
+	 WinHTTP.Open "POST",objFDI("URL")
+
+	'Set the client certificate
+	If strCertificateFile <> "" Then WinHTTP.SetClientCertificate "CURRENT_USER\QATEST\" & X509Certificate.FriendlyName
+
+	'Set the HTTP request headers
+	WinHTTP.setRequestHeader "Accept-Encoding","gzip,deflate"
+	WinHTTP.setRequestHeader "Content-Type","text/xml;charset=UTF-8"
+	WinHTTP.setRequestHeader "User-Agent","QTP"
+	WinHTTP.setRequestHeader "SOAPAction",objFDI("SOAPAction")
+
+	'Send the HTTP request
+	WinHTTP.Send objFDI("SOAPPayload")
+	If InStr(1,Err.Description, "certificate") >= 1 Then
+
+		'Report a warning and try again while ignoring errros
+		TestReport.ReportEvent micWarning, objFDM("SendReceiveSOAPMessage function warning #1"), Err.Description & vbCrLf & Err.Source
+		Err.Clear
+
+		'Set ignore flags
+		WinHTTP.Option(WinHttpRequestOption_SslErrorIgnoreFlags) = &H3300
+		WinHTTP.Send objFDI("SOAPPayload")
+
+		'If error persists the report a failure
+		If Err.Number <> 0 Then
+			TestReport.ReportEvent micFail, objFDM("SendReceiveSOAPMessage function exception #2"), Err.Description & vbCrLf & Err.Source
+		End If
+
+	End If
+        
+	'Add response to to output dictionary
+	objFDO("SOAPResponse") = WinHTTP.ResponseText
+	objFDO("Status") = WinHTTP.Status
+	objFDO("StatusText") = WinHTTP.StatusText
+
+	'Format XML tags to display correctly
+	If Len(objFDI("SOAPPayload")) >= 1 Then strFormatedPayload = Replace(Replace(Replace(objFDI("SOAPPayload"),"<","&lt"),">","&gt"),vbCrLf,"<br />")
+	If Len(objFDO("SOAPResponse")) >= 1 Then strFormatedRes = Replace(Replace(Replace(objFDO("SOAPResponse"),"<","&lt"),">","&gt"),vbCrLf,"<br />")
+
+	'Report step to custom report
+	Set objEventDesc = CreateObject("Scripting.Dictionary")
+	objEventDesc("ViewType") = "Sell.Explorer.2"
+	objEventDesc("Status") = micDone
+	objEventDesc("EnableFilter") = False
+	objEventDesc("NodeName") = "WebService custom report"
+	objEventDesc("StepHtmlInfo") = "<table border='1'><tr style='background-color:green'><td>Request</td><td>Response</td><tr><td>" & strFormatedPayload & "</td><td>" & strFormatedRes & "</td></tr></table>"
+	Reporter.LogEvent  "Replay",objEventDesc,Reporter.GetContext
+	Set objEventDesc = Nothing
+	TestReport.ReportStep "The '" & objFDI("SOAPAction") & "' operation done pointing to URL '" & objFDI("URL") & "'" , "<b>Request:</b><br />" & strFormatedPayload & "<br /><b>Response:</b><br />" & strFormatedRes
+
+End Function

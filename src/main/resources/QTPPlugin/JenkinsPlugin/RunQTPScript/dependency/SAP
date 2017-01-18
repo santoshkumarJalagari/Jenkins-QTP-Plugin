@@ -1,0 +1,126 @@
+'User defined method for statusbar object
+RegisterUserFunc "sapguistatusbar", "USendKeyENTER", "SendEnterToStatusbarMessages"
+RegisterUserFunc "SAPGuiTextArea","Set","Custom_SAPGuiTextAreaSet" 
+RegisterUserFunc "SAPGuiRadioButton","Set","Custom_SAPGuiRadioButtonSet" 
+RegisterUserFunc "SAPGuiOKCode","Set","Custom_SAPGuiOKCodeSet" 
+RegisterUserFunc "SAPGuiMenubar","Select","Custom_SAPGuiMenubarSelect" 
+RegisterUserFunc "SAPGuiEdit","Set","Custom_SAPGuiEditSet" 
+RegisterUserFunc "SAPGuiComboBox","Select","Custom_SAPGuiComboBoxSelect" 
+RegisterUserFunc "SAPGuiCheckBox","Set","Custom_SAPGuiCheckBoxSet" 
+RegisterUserFunc "SAPGuiButton","Click","Custom_SAPGuiButtonClick" 
+RegisterUserFunc "SAPGuiToolbar","SelectMenuItem","Custom_SAPGuiToolbarSelectMenuItem" 
+RegisterUserFunc "SAPGuiTabStrip","Select","Custom_SAPGuiTabStripSelect" 
+RegisterUserFunc "SAPGuiTable","SetCellData","Custom_SAPGuiTableSetCellData" 
+RegisterUserFunc "SAPGuiTable","SelectRow","Custom_SAPGuiTableSelectRow" 
+RegisterUserFunc "SAPGuiGrid","SelectRow","Custom_SAPGuiGridSelectRow" 
+RegisterUserFunc "SAPGuiGrid","SetCellData","Custom_SAPGuiGridCellData"
+RegisterUserFunc "SAPGuiWindow","SendKey","Custom_SAPGuiWindowSendKey"
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Function: SendEnterTostatusbatMessages
+'@Description To send enter key till all status bar messages are over
+'Return Value:  None
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Public Sub SendEnterToStatusbarMessages(ByRef objStatusbar)
+   Dim Strtext, objParent, IntCount
+	 IntCount = 1
+	Do While objStatusbar.Exist
+		objStatusbar.Sync 
+		Set objParent = objStatusbar.GetTOProperty("parent")
+		Strtext =objStatusbar.GetROProperty("text")
+		If Strtext = "" Then  Exit Do
+		objParent.SendKey ENTER
+		If IntCount = 10 Then TestReport.ReportEvent micWarning, "StatusBar Messages", "The following statusbar message is repeated infinitely" & " " & Strtext : Exit DO
+		IntCount = IntCount + 1
+    loop
+	Set objParent = Nothing
+	Set objStatusbar = Nothing
+End Sub
+Public Sub Custom_SAPGuiTextAreaSet(objSAPGuiTextArea,strVal)
+	objSAPGuiTextArea.Set strVal
+	TestReport.ReportStep "Enter " & objSAPGuiTextArea.GetROProperty("attachedtext"), strVal
+End Sub
+
+
+Public Sub Custom_SAPGuiRadioButtonSet(objSAPGuiRadioButton)
+	objSAPGuiRadioButton.Set
+	TestReport.ReportStep "SAPGuiRadioButton " & objSAPGuiRadioButton.GetROProperty("name") & "is set",""
+End Sub
+
+
+Public Sub Custom_SAPGuiOKCodeSet(objSAPGuiOKCode,strVal)
+	objSAPGuiOKCode.Set strVal
+	TestReport.ReportStep "Enter T-Code",strVal
+End Sub
+
+
+Public Sub Custom_SAPGuiComboBoxSelect(objSAPGuiComboBox,strVal)
+	objSAPGuiComboBox.Select strVal
+	TestReport.ReportStep "Select item in " & objSAPGuiComboBox.GetROProperty("name") ,strVal
+End Sub
+
+
+Public Sub Custom_SAPGuiMenubarSelect(objSAPGuiMenubar,strVal)
+	objSAPGuiMenubar.Select strVal
+	TestReport.ReportStep  "Select",strVal
+End Sub
+
+
+Public Sub Custom_SAPGuiEditSet(objSAPGuiEdit,strVal)
+	objSAPGuiEdit.Set strVal
+	TestReport.ReportStep "Enter " & objSAPGuiEdit.GetROProperty("attachedtext"), strVal
+End Sub
+
+Public Sub Custom_SAPGuiCheckBoxSet(objSAPGuiCheckBox,strVal)
+	objSAPGuiCheckBox.Set strVal
+	TestReport.ReportStep "Set checkbox " & objSAPGuiCheckBox.GetROProperty("name"), strVal
+End Sub
+
+
+Public Sub Custom_SAPGuiButtonClick(objSAPGuiButton)
+	objSAPGuiButton.Click
+	TestReport.ReportStep "Click " & objSAPGuiButton.GetROProperty("tooltip"), ""
+End Sub
+
+
+Public Sub Custom_SAPGuiToolbarSelectMenuItem(objSAPGuiToolbar,strVal)
+	objSAPGuiToolbar.Select strVal
+	TestReport.ReportStep "Select item in " & objSAPGuiToolbar.GetROProperty("name") ,strVal
+End Sub
+
+
+Public Sub Custom_SAPGuiTabStripSelect(objSAPGuiTabStrip,strVal)
+	objSAPGuiTabStrip.Select strVal
+	TestReport.ReportStep "Select a tab in table" & objSAPGuiTabStrip.GetROProperty("name") ,strVal
+End Sub
+
+
+Public Sub Custom_SAPGuiTableSelectRow(objSAPGuiTable,intRow)
+	objSAPGuiTable.SelectRow intRow
+	TestReport.ReportStep "Select a row in table " & objSAPGuiTable.GetROProperty("name") ,intRow
+End Sub
+
+
+Public Sub Custom_SAPGuiTableSetCellData(objSAPGuiTable , intRow , strCol , strVal)
+	objSAPGuiTable.SetCellData intRow ,strCol , strVal
+	TestReport.ReportStep "Enter " & strCol , strVal
+End Sub
+
+
+Public Sub Custom_SAPGuiGridSelectRow(objSAPGuiGrid,intRow)
+	objSAPGuiGrid.SelectRow intRow
+	TestReport.ReportStep "Select row in grid " & objSAPGuiGrid.GetROProperty("name") ,intRow
+End Sub
+
+
+Public Sub Custom_SAPGuiGridCellData(objSAPGuiGrid , intRow , strCol , strVal)
+	objSAPGuiGrid.SetCellData intRow ,strCol , strVal
+	TestReport.ReportStep "Enter " & strCol , strVal
+End Sub
+
+Public Sub Custom_SAPGuiWindowSendKey(objSAPGuiWindow , strVal)
+	objSAPGuiWindow.SendKey strVal
+	TestReport.ReportStep "Send keyborad input to SAP window '" & Left(objSAPGuiWindow.GetROProperty("text"),50) & "'" , GetSAPKeyBoardCombination(strVal)
+End Sub
